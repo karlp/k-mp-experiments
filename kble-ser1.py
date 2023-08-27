@@ -31,23 +31,25 @@ aioble.register_services(k_service)
 
 lolq = []
 
+async def handle_write_ctrl(dat):
+    while True:
+        await k_char_ctrl.written()
+        msg = k_char_ctrl.read()
+        print(f"received ctrl write", msg)
 
-async def t_handle_client(conn):
-    try:
-        with conn.timeout(None):
-            while True:
-                print("Waiting for write")
-                await k_char_ctrl.written()
-                msg = k_char_ctrl.read()
-                #control_characteristic.write(b"")
-                print("received", msg)
-    except aioble.DeviceDisconnectedError:
-        print("disconn in handler")
-        return
+
+async def handle_write2(dat):
+    while True:
+        await k_char_2.written()
+        msg = k_char_2.read()
+        print(f"received second write:", msg)
 
 
 # This is a single server object, I'd really like to make a multi conn one though really.
 async def k_periph_task():
+    asyncio.create_task(handle_write_ctrl("blah"))
+    asyncio.create_task(handle_write2("wop"))
+
     while True:
         async with await aioble.advertise(
             _ADV_INTERVAL_MS,
@@ -58,8 +60,8 @@ async def k_periph_task():
         ) as connection:
             print("Connection from", connection.device)
             #await asyncio.create_task(t_handle_client(connection))
-            await t_handle_client(connection)
-            #await connection.disconnected()
+            #await t_handle_client(connection)
+            await connection.disconnected()
             print("disconnected, advertising again...")
 
 
@@ -77,8 +79,6 @@ async def t_screen_play():
         await asyncio.sleep_ms(500)
         i += 1
         tft.text(font, f"{i}", 20, 60)
-
-
 
 
 
