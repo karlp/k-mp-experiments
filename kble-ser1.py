@@ -20,7 +20,11 @@ temp_char = aioble.Characteristic(temp_service, _ENV_SENSE_TEMP_UUID, read=True,
 
 k_service = aioble.Service(bluetooth.UUID("0c32766e-f93a-40bf-8b7a-8d5ba3b6114a"))
 k_char_ctrl = aioble.Characteristic(k_service, bluetooth.UUID("90b996d6-8f71-4439-b80b-41d9e7edaccc"), read=True, write=True)
+k_char_ctrl_ddesc = aioble.Descriptor(k_char_ctrl, bluetooth.UUID(0x2901), read=True)
+k_char_ctrl_ddesc.write("my control char")
 k_char_2 = aioble.Characteristic(k_service, bluetooth.UUID("ec4ad188-b475-4461-a910-ffa602a60139"), read=True, write=True)
+k_char_2_ddesc = aioble.Descriptor(k_char_2, bluetooth.UUID(0x2901), read=True)
+k_char_2_ddesc.write("my second char")
 
 aioble.register_services(temp_service)
 aioble.register_services(k_service)
