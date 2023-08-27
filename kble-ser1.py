@@ -66,7 +66,7 @@ async def k_periph_task():
 
 
 async def t_screen_play():
-    tft = tft_config.config()
+    tft = tft_config.config(rotation=3)
     tft.init()
     tft.on()
     h = tft.height()
@@ -78,7 +78,7 @@ async def t_screen_play():
     while True:
         await asyncio.sleep_ms(500)
         i += 1
-        tft.text(font, f"{i}", 20, 60)
+        tft.text(font, f"hello {i}", 0, 0)
 
 
 
