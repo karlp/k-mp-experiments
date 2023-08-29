@@ -27,9 +27,6 @@ k_char_2_ddesc = aioble.Descriptor(k_char_2, bluetooth.UUID(0x2901), read=True)
 k_char_2_ddesc.write("my second char")
 
 
-lolq = []
-
-
 class KApp:
     def __init__(self):
         aioble.register_services(k_service, temp_service)
@@ -40,12 +37,10 @@ class KApp:
 
     async def start(self, blah):
         self.tft.on()
-
         await asyncio.gather(
             self.t_periph(),
             self.t_screen_play(),
         )
-
 
     async def t_screen_play(self):
         self.tft.text(font, "hello", 0, 0)
@@ -89,13 +84,25 @@ class KApp:
                 print("disconnected, advertising again...")
 
 
-# Run both tasks.
+# Boilerplate below here ##########
+def set_global_exception():
+    def handle_exception(loop, context):
+        import sys
+        sys.print_exception(context["exception"])
+        sys.exit()
+    loop = asyncio.get_event_loop()
+    loop.set_exception_handler(handle_exception)
+
+
 async def main():
     print("starting...")
+    set_global_exception()  # Debug aid
     app = KApp()
     await app.start("adsf")
     print("never hit here")
 
 
-
-asyncio.run(main())
+try:
+    asyncio.run(main())
+finally:
+    asyncio.new_event_loop()  # Clear retained state
