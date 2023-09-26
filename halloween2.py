@@ -191,22 +191,12 @@ class KPeopleSensor:
     """
     def __init__(self, pin):
         self.pin = pin
-        #self._detected = asyncio.Event()
         self.found = asyncio.ThreadSafeFlag()  # From isr_rules.html....
-        #self.pin.irq(self._detected.set)
         self.pin.irq(self._handler, trigger=machine.Pin.IRQ_FALLING)
-        # FIXME - actually hookup a sensor here, otherwise it waits forever...
 
     def _handler(self, p):
         print("handler...", p)
         self.found.set()
-
-    # async def found(self):
-    #     await self._detected.wait()
-
-
-class KPeopleSensorFake:
-    pass
 
 class KLights:
     """
@@ -214,7 +204,9 @@ class KLights:
     """
     def __init__(self, strip: neopixel.NeoPixel):
         self.np = strip
+        self.np.ORDER = (0, 1, 2, 3)  # My ws2815 are actualyl rgb, not grb like classics.
         self.available = asyncio.Event()
+        self.irq = asyncio.Event()
         self.available.set()
         self.SCALE = 4
         # "our" purple/green...
@@ -222,7 +214,6 @@ class KLights:
         self.C_GREEN = (50//self.SCALE, 168//self.SCALE, 131//self.SCALE)
         self.C_RED = (230//self.SCALE, 0, 0)
         self.C_ORANGE = (227//self.SCALE, 98//self.SCALE, 0)
-        self.irq = asyncio.Event()
 
     def off(self):
         self.np.fill((0, 0, 0))
@@ -236,6 +227,7 @@ class KLights:
         await asyncio.sleep_ms(100)
 
     async def _inner_show_idle1(self):
+        print("starting show idle1")
         self.np.fill(self.C_PURPLE)
         self.np.write()
         #await asyncio.sleep(0.2)
@@ -244,7 +236,7 @@ class KLights:
         myrange.extend(range(50, 0, -5))
         for x in myrange:
             selected = [random.randrange(0, self.np.n) for _ in range(x)]
-            print("selected x ", len(selected))
+            print("IDLE1 x ", len(selected))
             ## ideally, we want some variance in the next colour now though really...
             #[self.np.__setitem__(sel, self.C_GREEN) for sel in selected]
             for sel in selected: self.np[sel] = self.C_GREEN
@@ -263,28 +255,6 @@ class KLights:
         """
         pass
 
-
-    async def run_idle(self):
-        """
-        Runs a continuous loosely rolling ripples of purple/green...
-        At least, that's the intention....
-        :return:
-        """
-        # Set IRQ, and wait for available...
-        self.irq.set()
-        print("blocking on available...")
-        await self.available.wait()
-        self.available.clear()
-        self.irq.clear()
-        print("ok, to start loop?")
-        while not self.irq.is_set():
-            #self._inner_show_fake()
-            self._inner_show_idle1()
-
-        # return control
-        self.irq.clear()
-        self.available.set()
-
     async def _inner_show_attack_fake(self):
         lights = "angry red orange attack"
         lstr = ''.join(random.choice((str.upper, str.lower))(c) for c in lights)
@@ -296,28 +266,23 @@ class KLights:
         Can endlessly tweak the graphics, but get two running "modes" first...
         """
         choices = [self.C_RED, self.C_ORANGE]
-        print("ACK!",)
+        #print("ACK!",)
         for n in range(self.np.n): self.np[n] = random.choice(choices)
         self.np.write()
         await asyncio.sleep_ms(100)
 
-
-    async def run_attack1(self):
+    async def run_idle_simple(self):
         """
-        animates more "angry" reddy/oranges....
-        (we'll never get the art direction we want, too much led maths, but let's pretend...)
+        Just the wrapper, events and stuff are now external...
         :return:
         """
+        while True:
+            await self._inner_show_idle1()
 
-        self.irq.set()
-        await self.available.wait()
-        self.available.clear()
-        self.irq.clear()
-        while not self.irq.is_set():
+    async def run_attack_simple(self):
+        """no events, just the wrapper"""
+        while True:
             await self._inner_show_attack1()
-        # return control
-        self.irq.clear()
-        self.available.set()
 
 class KApp():
     """
@@ -335,7 +300,6 @@ class KApp():
         self.mencoder = KEncoder(Board.ENCODER1, Board.ENCODER2)
         self.spider = Spider(self.motor, self.mencoder)
         self.lights = KLights(neopixel.NeoPixel(Board.STRIP, 300))
-        self.lights.ORDER = (0, 1, 2, 3)  # My ws2815 are actualyl rgb, not grb like classics.
         self.people_sensor = KPeopleSensor(Board.DETECTOR)
 
     async def set_position(self, position):
@@ -367,55 +331,23 @@ class KApp():
         # fuck, I bit off more async python than I'm really ready for didn't I :)
         # pseudocode ftw???
         while True:
-            print("start iter...")
+            print("(RE)starting outer loop")
             #await self.start_over()
-            #li = asyncio.create_task(self.lights.run_idle())
-            asyncio.create_task(self.lights._inner_show_idle1())
+            t_idle = asyncio.create_task(self.lights.run_idle_simple())
             await self.people_sensor.found.wait()
+            t_idle.cancel()
             # notify internet about scaring another person?!!!
-            #await self.show1()
             print("main found a person!")
             # add a lighting task here...
-            la = asyncio.create_task(self.lights.run_attack1())
-            print("sleeping before allowing a new person")
+            t_attack = asyncio.create_task(self.lights.run_attack_simple())
+            print("running attack mode for XXX seconds before sleeping before allowing a new person")
             await asyncio.sleep(5)
+            t_attack.cancel()
 
 
 
-def t1():
-    loop = asyncio.get_event_loop()
-    np = neopixel.NeoPixel(Board.STRIP, 300)
-    np.ORDER = (0,1,2,3)
-    kl = KLights(np)
-    #loop.create_task(kl._inner_show_idle1())
-    loop.run_until_complete(kl._inner_show_idle1())
-
-def t2():
-    loop = asyncio.get_event_loop()
-    np = neopixel.NeoPixel(Board.STRIP, 300)
-    np.ORDER = (0,1,2,3)
-    kl = KLights(np)
-    #loop.create_task(kl._inner_show_idle1())
-    loop.run_until_complete(kl.run_idle())
 
 def t3():
     loop = asyncio.get_event_loop()
     app = KApp()
     loop.run_until_complete(app.wait_for_stuff())
-
-
-def t4():
-    p = KPeopleSensor(Board.DETECTOR)
-
-    async def my_t():
-        while True:
-            print("waiting for button")
-            await p.found.wait()
-            print("detected! (snooze)")
-            await asyncio.sleep_ms(500)
-        print("um, dropped off")
-
-    loop = asyncio.get_event_loop()
-    #loop.create_task(my_t())
-    #loop.run_forever()
-    loop.run_until_complete(my_t())
